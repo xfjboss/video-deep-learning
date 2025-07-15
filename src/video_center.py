@@ -1,42 +1,42 @@
+# src/video_center.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import accuracy_score, confusion_matrix
-
 from video_reader import VideoReader
 from video_model import VideoModel
 
-def main():
 
-    # Step 1: 加载数据
+def main():
+    # 配置参数
+    model_type = '3d'  # '2d' or '3d'
+    batch_size = 8 if model_type == '3d' else 32
+    clip_len = 16 if model_type == '3d' else 1
+
     reader = VideoReader(
         video_dir="",
         label_csv="",
         class_index_csv="",
-        max_frames_per_action=10  # 控制样本量
-        )
+        frames_per_clip=clip_len,
+        model_type=model_type
+    )
 
     frames, labels, label_map = reader.load_dataset()
-    frames, labels, label_map = reader.load_dataset()
+    print(f"📦 Loaded {len(frames)} samples.")
 
-    print(f"共加载帧数：{len(frames)}, 类别数：{len(label_map)}")
-
-    # Step 2: 转为 DataLoader
     X = torch.stack(frames)
     y = torch.tensor(labels)
     dataset = TensorDataset(X, y)
-    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    # Step 3: 初始化模型
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = VideoModel(num_classes=len(label_map)).to(device)
+    model = VideoModel(num_classes=len(label_map), model_type=model_type).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.classifier.parameters(), lr=0.001)  # 只训练线性层
+    optimizer = optim.Adam(model.classifier.parameters(), lr=1e-3)
 
-    # Step 4: 训练模型
     model.train()
-    for epoch in range(3):  # Day1 简单训练几个 epoch
+    for epoch in range(3):
         for batch_x, batch_y in loader:
             batch_x, batch_y = batch_x.to(device), batch_y.to(device)
             outputs = model(batch_x)
@@ -44,24 +44,23 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        print(f"Epoch {epoch+1} finished, Loss: {loss.item():.4f}")
+        print(f"Epoch {epoch+1}: Loss = {loss.item():.4f}")
 
-    # Step 5: 模型评估
+    # 评估
     model.eval()
-    all_preds = []
-    all_true = []
+    all_preds, all_true = [], []
     with torch.no_grad():
         for batch_x, batch_y in loader:
             batch_x = batch_x.to(device)
-            outputs = model(batch_x)
-            preds = torch.argmax(outputs, dim=1).cpu()
+            preds = torch.argmax(model(batch_x), dim=1).cpu()
             all_preds.extend(preds.tolist())
             all_true.extend(batch_y.tolist())
 
     acc = accuracy_score(all_true, all_preds)
-    cm = confusion_matrix(all_true, all_preds)
-    print(f"\n✅ Accuracy: {acc:.4f}")
-    print(f"Confusion Matrix:\n{cm}")
+    print(f"✅ Accuracy: {acc:.4f}")
+    print("Confusion Matrix:")
+    print(confusion_matrix(all_true, all_preds))
+
 
 if __name__ == "__main__":
     main()

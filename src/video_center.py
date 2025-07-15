@@ -8,11 +8,16 @@ from video_reader import VideoReader
 from video_model import VideoModel
 
 def main():
-    # 配置路径
-    data_path = "C:/xf/xf/research/video_task/data"
 
     # Step 1: 加载数据
-    reader = VideoReader(data_path)
+    reader = VideoReader(
+        video_dir="",
+        label_csv="",
+        class_index_csv="",
+        max_frames_per_action=10  # 控制样本量
+        )
+
+    frames, labels, label_map = reader.load_dataset()
     frames, labels, label_map = reader.load_dataset()
 
     print(f"共加载帧数：{len(frames)}, 类别数：{len(label_map)}")

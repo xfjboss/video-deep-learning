@@ -26,7 +26,7 @@ class VideoReader:
         label = int(parts[3])  # class_index 是第4个字段
 
         # 视频文件路径直接拼接
-        video_path = os.path.join(self.video_root, f"{id_str}.mp4")
+        #video_path = os.path.join(self.video_root, f"{id_str}.mp4")
 
         # 起止帧从 ID 字符串中提取
         id_parts = id_str.split('-')
@@ -35,6 +35,9 @@ class VideoReader:
 
         start_frame = int(id_parts[5][1:])  # 去掉 'F'
         end_frame = int(id_parts[6][1:])
+
+        r_id_str = id_parts[0] + '-' + id_parts[1] + '-' + id_parts[2]
+        video_path = os.path.join(self.video_root, f"{r_id_str}.mp4")
 
         return video_path, start_frame, end_frame, label
 
@@ -87,6 +90,8 @@ class VideoReader:
         for line in tqdm(lines):
             try:
                 video_path, start, end, label = self._parse_line(line)
+                print(f"11111start-end: {start} ")
+                print(f"11111start-end: {end} ")
                 if not os.path.exists(video_path):
                     print(f"⚠️ File not found: {video_path}")
                     continue

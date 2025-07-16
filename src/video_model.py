@@ -21,9 +21,7 @@ class VideoModel(nn.Module):
             raise ValueError("Invalid model type")
 
     def forward(self, x):
-        with torch.no_grad():
-            feats = self.backbone(x)
+        feats = self.backbone(x)
         feats = feats.view(feats.size(0), -1)
         out = self.classifier(feats)
         return out
-

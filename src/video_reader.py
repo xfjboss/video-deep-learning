@@ -2,7 +2,7 @@
 import os
 import cv2
 import torch
-from glob import glob
+import random
 from tqdm import tqdm
 from torchvision import transforms
 
@@ -23,21 +23,16 @@ class VideoReader:
             raise ValueError(f"Invalid line format: {line}")
 
         id_str = parts[0]
-        label = int(parts[3])  # class_index 是第4个字段
+        label = int(parts[3])
 
-        # 视频文件路径直接拼接
-        #video_path = os.path.join(self.video_root, f"{id_str}.mp4")
-
-        # 起止帧从 ID 字符串中提取
         id_parts = id_str.split('-')
         if len(id_parts) < 7:
             raise ValueError(f"Invalid ID format: {id_str}")
 
-        start_frame = int(id_parts[5][1:])  # 去掉 'F'
+        start_frame = int(id_parts[5][1:])
         end_frame = int(id_parts[6][1:])
-
-        r_id_str = id_parts[0] + '-' + id_parts[1] + '-' + id_parts[2]
-        video_path = os.path.join(self.video_root, f"{r_id_str}.mp4")
+        video_id = '-'.join(id_parts[:3])
+        video_path = os.path.join(self.video_root, f"{video_id}.mp4")
 
         return video_path, start_frame, end_frame, label
 
@@ -46,9 +41,8 @@ class VideoReader:
         if not cap.isOpened():
             return []
 
-        step = self.frames_per_clip
         clips = []
-
+        step = self.frames_per_clip
         for clip_start in range(start_frame, end_frame - step + 1, step):
             frames = []
             for i in range(clip_start, clip_start + step):
@@ -67,42 +61,38 @@ class VideoReader:
         cap.release()
         return clips
 
-    def load_from_split(self, split_txt, val_split_ratio=0.2):
-        with open(split_txt, 'r') as f:
-            lines = f.readlines()
+    def load_sampled_data(self, train_txt, test_txt, train_n=200, val_n=40, test_n=60):
+        # 读取 train1.txt
+        with open(train_txt, 'r') as f:
+            train_lines = f.readlines()
+        random.shuffle(train_lines)
+        train_lines_selected = train_lines[:train_n]
+        val_lines_selected = train_lines[train_n:train_n+val_n]
 
-        split_index = int(len(lines) * (1 - val_split_ratio))
-        train_lines = lines[:split_index]
-        val_lines = lines[split_index:]
+        # 读取 test1.txt
+        with open(test_txt, 'r') as f:
+            test_lines = f.readlines()
+        random.shuffle(test_lines)
+        test_lines_selected = test_lines[:test_n]
 
-        train_data = self._load_lines(train_lines)
-        val_data = self._load_lines(val_lines)
+        # 加载数据
+        train_data = self._load_lines(train_lines_selected)
+        val_data = self._load_lines(val_lines_selected)
+        test_data = self._load_lines(test_lines_selected)
 
-        return train_data, val_data
-
-    def load_test_set(self, split_txt):
-        with open(split_txt, 'r') as f:
-            lines = f.readlines()
-        return self._load_lines(lines)
+        return train_data, val_data, test_data
 
     def _load_lines(self, lines):
         data, labels = [], []
         for line in tqdm(lines):
             try:
                 video_path, start, end, label = self._parse_line(line)
-                print(f"11111start-end: {start} ")
-                print(f"11111start-end: {end} ")
                 if not os.path.exists(video_path):
-                    print(f"⚠️ File not found: {video_path}")
                     continue
                 clips = self._read_clip(video_path, start, end)
-                if not clips:
-                    print(f"⚠️ No valid clip from {video_path} [{start}-{end}]")
                 for clip in clips:
                     data.append(clip)
                     labels.append(label)
             except Exception as e:
                 print(f"⚠️ Failed to process line: {line.strip()}, error: {e}")
-        print(f"[INFO] Collected {len(data)} clips from {len(lines)} samples.")
-        print(f"[✅] Loaded {len(data)} clips from {len(lines)} lines")
         return data, labels

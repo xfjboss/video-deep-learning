@@ -5,6 +5,8 @@ import torch
 import random
 from tqdm import tqdm
 from torchvision import transforms
+from torch.utils.data import Dataset
+
 
 class VideoReader:
     def __init__(self, video_root, frames_per_clip=16, model_type='3d'):
@@ -96,3 +98,20 @@ class VideoReader:
             except Exception as e:
                 print(f"⚠️ Failed to process line: {line.strip()}, error: {e}")
         return data, labels
+
+class VideoDataset(Dataset):
+    def __init__(self, data, labels, device=None):
+        self.data = data
+        self.labels = labels
+        self.device = device
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        x = self.data[idx]
+        y = self.labels[idx]
+        if self.device:  # 避免预加载整个数据
+            x = x.to(self.device)
+            y = torch.tensor(y).to(self.device)
+        return x, y

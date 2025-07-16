@@ -4,10 +4,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import accuracy_score
-from video_reader import VideoReader
+from video_reader import VideoDataset, VideoReader
 from video_model import VideoModel
 
-
+BC = 4
+EP = 30
 def run(model_type='3d', epochs=5):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -21,12 +22,9 @@ def run(model_type='3d', epochs=5):
         train_n=200, val_n=40, test_n=60
 )
 
-    def to_loader(data, labels, batch_size=8):
-        if not data:
-            raise ValueError("Empty dataset!")
-        X = torch.stack(data).to(device)
-        y = torch.tensor(labels).to(device)
-        return DataLoader(TensorDataset(X, y), batch_size=batch_size, shuffle=True)
+    def to_loader(data, labels, batch_size=BC, device=None):
+        dataset = VideoDataset(data, labels, device=device)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     batch_size = 8 if model_type == '3d' else 32
     train_loader = to_loader(*train_data, batch_size)
@@ -75,4 +73,4 @@ def run(model_type='3d', epochs=5):
 
 
 if __name__ == '__main__':
-    run(model_type='3d', epochs=5)
+    run(model_type='3d', epochs=EP)

@@ -2,65 +2,70 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import accuracy_score, confusion_matrix
 from video_reader import VideoReader
 from video_model import VideoModel
 
 
-def main():
-    # 配置参数
-    model_type = '3d'  # '2d' or '3d'
+def run(model_type='3d', split='1', epochs=5):
+    video_root = r'C:\xf\xf\research\video_task\data\raw_video'
+    train_txt = f'train{split}.txt'
+    test_txt = f'test{split}.txt'
+
+    reader = VideoReader(video_root, frames_per_clip=16, model_type=model_type)
+    train_data, val_data = reader.load_from_split(train_txt)
+    test_data, test_labels = reader.load_test_set(test_txt)
+
+    def to_loader(data, labels, batch_size):
+        X = torch.stack(data)
+        y = torch.tensor(labels)
+        return DataLoader(TensorDataset(X, y), batch_size=batch_size, shuffle=True)
+
     batch_size = 8 if model_type == '3d' else 32
-    clip_len = 16 if model_type == '3d' else 1
+    train_loader = to_loader(*train_data, batch_size)
+    val_loader = to_loader(*val_data, batch_size)
+    test_loader = to_loader(test_data, test_labels, batch_size)
 
-    reader = VideoReader(
-        video_dir="",
-        label_csv="",
-        class_index_csv="",
-        frames_per_clip=clip_len,
-        model_type=model_type
-    )
-
-    frames, labels, label_map = reader.load_dataset()
-    print(f"📦 Loaded {len(frames)} samples.")
-
-    X = torch.stack(frames)
-    y = torch.tensor(labels)
-    dataset = TensorDataset(X, y)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = VideoModel(num_classes=len(label_map), model_type=model_type).to(device)
-    criterion = nn.CrossEntropyLoss()
+    model = VideoModel(num_classes=max(test_labels) + 1, model_type=model_type).cuda()
     optimizer = optim.Adam(model.classifier.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss()
 
-    model.train()
-    for epoch in range(3):
-        for batch_x, batch_y in loader:
-            batch_x, batch_y = batch_x.to(device), batch_y.to(device)
-            outputs = model(batch_x)
-            loss = criterion(outputs, batch_y)
+    for epoch in range(epochs):
+        model.train()
+        for x, y in train_loader:
+            x, y = x.cuda(), y.cuda()
             optimizer.zero_grad()
+            loss = criterion(model(x), y)
             loss.backward()
             optimizer.step()
-        print(f"Epoch {epoch+1}: Loss = {loss.item():.4f}")
+        print(f"[Epoch {epoch+1}] loss: {loss.item():.4f}")
 
-    # 评估
-    model.eval()
-    all_preds, all_true = [], []
+        model.eval()
+        preds, targets = [], []
+        with torch.no_grad():
+            for x, y in val_loader:
+                x = x.cuda()
+                out = model(x).argmax(dim=1).cpu()
+                preds.extend(out.tolist())
+                targets.extend(y.tolist())
+        acc = accuracy_score(targets, preds)
+        print(f"🧪 Val Accuracy: {acc:.4f}")
+
+    # 最终在测试集评估
+    preds, targets = [], []
     with torch.no_grad():
-        for batch_x, batch_y in loader:
-            batch_x = batch_x.to(device)
-            preds = torch.argmax(model(batch_x), dim=1).cpu()
-            all_preds.extend(preds.tolist())
-            all_true.extend(batch_y.tolist())
+        for x, y in test_loader:
+            x = x.cuda()
+            out = model(x).argmax(dim=1).cpu()
+            preds.extend(out.tolist())
+            targets.extend(y.tolist())
 
-    acc = accuracy_score(all_true, all_preds)
-    print(f"✅ Accuracy: {acc:.4f}")
+    print(f"🎯 Test Accuracy: {accuracy_score(targets, preds):.4f}")
     print("Confusion Matrix:")
-    print(confusion_matrix(all_true, all_preds))
+    print(confusion_matrix(targets, preds))
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    run(model_type='2d', split='1', epochs=10)
+    run(model_type='3d', split='1', epochs=10)

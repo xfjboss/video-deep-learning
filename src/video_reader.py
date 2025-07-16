@@ -1,48 +1,43 @@
+# src/video_reader.py
 import os
 import cv2
 import torch
-import pandas as pd
-from torchvision import transforms
 from glob import glob
 from tqdm import tqdm
-
+from torchvision import transforms
 
 class VideoReader:
-    def __init__(self, video_dir, label_csv, class_index_csv, frames_per_clip=16, model_type='2d'):
-        self.video_dir = video_dir
-        self.label_csv = pd.read_csv(label_csv)
+    def __init__(self, video_root, frames_per_clip=16, model_type='3d'):
+        self.video_root = video_root
         self.frames_per_clip = frames_per_clip
         self.model_type = model_type
-        self.class_map = self._load_class_index(class_index_csv)
-
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize((112, 112)),
             transforms.ToTensor()
         ])
 
-    def _load_class_index(self, csv_path):
-        df = pd.read_csv(csv_path)
-        class_map = {}
-        for _, row in df.iterrows():
-            key = f"{row['verb']}_{row['noun']}"
-            class_map[key] = int(row['class_index'])
-        return class_map
+    def _parse_line(self, line):
+        parts = line.strip().split()
+        id_str = parts[0]
+        label = int(parts[4])  # 第5列是 class_id
 
-    def _get_video_path(self, video_id):
-        pattern = os.path.join(self.video_dir, "**", f"{video_id}.mp4")
-        matches = glob(pattern, recursive=True)
-        return matches[0] if matches else None
+        id_parts = id_str.split('-')
+        participant = id_parts[0]
+        record = id_parts[1]
+        task = id_parts[2]
+        start_frame = int(id_parts[5][1:])  # 去掉 F 前缀
+        end_frame = int(id_parts[6][1:])
+        video_path = os.path.join(self.video_root, participant, record, f"{task}.mp4")
+        return video_path, start_frame, end_frame, label
 
-    def read_action_clip(self, video_path, start_frame, end_frame):
+    def _read_clip(self, video_path, start_frame, end_frame):
         cap = cv2.VideoCapture(video_path)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = end_frame - start_frame
-        if duration < self.frames_per_clip:
-            return None  # 跳过过短片段
+        if not cap.isOpened():
+            return []
 
-        clips = []
         step = self.frames_per_clip
+        clips = []
 
         for clip_start in range(start_frame, end_frame - step + 1, step):
             frames = []
@@ -52,37 +47,45 @@ class VideoReader:
                 if not ret:
                     break
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame_tensor = self.transform(frame)
-                frames.append(frame_tensor)
+                frame = self.transform(frame)
+                frames.append(frame)
             if len(frames) == step:
-                clip_tensor = torch.stack(frames)  # [T, C, H, W]
-                clips.append(clip_tensor)
+                clip = torch.stack(frames)  # [T, C, H, W]
+                if self.model_type == '3d':
+                    clip = clip.permute(1, 0, 2, 3)  # [C, T, H, W]
+                clips.append(clip)
         cap.release()
         return clips
 
-    def load_dataset(self):
-        data = []
-        labels = []
-        for _, row in tqdm(self.label_csv.iterrows(), total=len(self.label_csv)):
-            video_id = row["video_id"]
-            start = int(row["start_frame"])
-            end = int(row["end_frame"])
-            key = f"{row['verb']}_{row['noun']}"
-            label = self.class_map.get(key)
+    def load_from_split(self, split_txt, val_split_ratio=0.2):
+        with open(split_txt, 'r') as f:
+            lines = f.readlines()
 
-            if label is None:
-                continue
-            video_path = self._get_video_path(video_id)
-            if not video_path:
-                continue
+        split_index = int(len(lines) * (1 - val_split_ratio))
+        train_lines = lines[:split_index]
+        val_lines = lines[split_index:]
 
-            clips = self.read_action_clip(video_path, start, end)
-            if clips:
+        train_data = self._load_lines(train_lines)
+        val_data = self._load_lines(val_lines)
+
+        return train_data, val_data
+
+    def load_test_set(self, split_txt):
+        with open(split_txt, 'r') as f:
+            lines = f.readlines()
+        return self._load_lines(lines)
+
+    def _load_lines(self, lines):
+        data, labels = [], []
+        for line in tqdm(lines):
+            try:
+                video_path, start, end, label = self._parse_line(line)
+                if not os.path.exists(video_path):
+                    continue
+                clips = self._read_clip(video_path, start, end)
                 for clip in clips:
-                    if self.model_type == '3d':
-                        data.append(clip.permute(1, 0, 2, 3))  # [C, T, H, W]
-                    else:
-                        for frame in clip:  # 用作2D输入
-                            data.append(frame)
-                    labels.extend([label] * (len(clips) if self.model_type == '3d' else len(clip)))
-        return data, labels, self.class_map
+                    data.append(clip)
+                    labels.append(label)
+            except Exception as e:
+                print(f"⚠️ Failed to process line: {line.strip()}, error: {e}")
+        return data, labels

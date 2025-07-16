@@ -43,6 +43,9 @@ def run(model_type='3d', epochs=5):
         model.train()
         total_loss = 0
         for x, y in train_loader:
+            x = x.to(device)
+            y = y.to(device)
+
             optimizer.zero_grad()
             out = model(x)
             loss = criterion(out, y)
@@ -55,6 +58,9 @@ def run(model_type='3d', epochs=5):
         with torch.no_grad():
             correct, total = 0, 0
             for x, y in val_loader:
+                x = x.to(device)
+                y = y.to(device)
+
                 preds = model(x).argmax(dim=1)
                 correct += (preds == y).sum().item()
                 total += y.size(0)
@@ -66,6 +72,9 @@ def run(model_type='3d', epochs=5):
     with torch.no_grad():
         correct, total = 0, 0
         for x, y in test_loader:
+            x = x.to(device)
+            y = y.to(device)
+
             preds = model(x).argmax(dim=1)
             correct += (preds == y).sum().item()
             total += y.size(0)

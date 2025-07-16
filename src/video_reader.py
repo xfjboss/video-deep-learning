@@ -19,10 +19,16 @@ class VideoReader:
 
     def _parse_line(self, line):
         parts = line.strip().split()
+        if len(parts) < 5:
+            raise ValueError(f"Invalid line format: {line}")
+
         id_str = parts[0]
         label = int(parts[4])  # 第5列是 class_id
 
         id_parts = id_str.split('-')
+        if len(id_parts) < 7:
+            raise ValueError(f"Invalid ID format: {id_str}")
+
         participant = id_parts[0]
         record = id_parts[1]
         task = id_parts[2]
@@ -81,11 +87,15 @@ class VideoReader:
             try:
                 video_path, start, end, label = self._parse_line(line)
                 if not os.path.exists(video_path):
+                    print(f"⚠️ File not found: {video_path}")
                     continue
                 clips = self._read_clip(video_path, start, end)
+                if not clips:
+                    print(f"⚠️ No valid clip from {video_path} [{start}-{end}]")
                 for clip in clips:
                     data.append(clip)
                     labels.append(label)
             except Exception as e:
                 print(f"⚠️ Failed to process line: {line.strip()}, error: {e}")
+        print(f"[INFO] Collected {len(data)} clips from {len(lines)} samples.")
         return data, labels

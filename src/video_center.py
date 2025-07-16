@@ -9,9 +9,9 @@ from video_model import VideoModel
 
 
 def run(model_type='3d', split='1', epochs=5):
-    video_root = r'C:\xf\xf\research\video_task\data\raw_video'
-    train_txt = f'train{split}.txt'
-    test_txt = f'test{split}.txt'
+    video_root = '/home/yudong/Documentos/test/video-deep-learning-master/data/Raw_Videos'
+    train_txt = '/home/yudong/Documentos/test/video-deep-learning-master/data/train_split1.txt'
+    test_txt = '/home/yudong/Documentos/test/video-deep-learning-master/data/test_split1.txt'
 
     reader = VideoReader(video_root, frames_per_clip=16, model_type=model_type)
     train_data, val_data = reader.load_from_split(train_txt)

@@ -19,11 +19,11 @@ class VideoReader:
 
     def _parse_line(self, line):
         parts = line.strip().split()
-        if len(parts) < 5:
+        if len(parts) < 4:
             raise ValueError(f"Invalid line format: {line}")
 
         id_str = parts[0]
-        label = int(parts[4])  # 第5列是 class_id
+        label = int(parts[3])  # class_index 是第4个字段（从0计数就是 parts[3]）
 
         id_parts = id_str.split('-')
         if len(id_parts) < 7:
@@ -32,7 +32,7 @@ class VideoReader:
         participant = id_parts[0]
         record = id_parts[1]
         task = id_parts[2]
-        start_frame = int(id_parts[5][1:])  # 去掉 F 前缀
+        start_frame = int(id_parts[5][1:])  # 去掉 'F'
         end_frame = int(id_parts[6][1:])
         video_path = os.path.join(self.video_root, participant, record, f"{task}.mp4")
         return video_path, start_frame, end_frame, label
@@ -98,4 +98,5 @@ class VideoReader:
             except Exception as e:
                 print(f"⚠️ Failed to process line: {line.strip()}, error: {e}")
         print(f"[INFO] Collected {len(data)} clips from {len(lines)} samples.")
+        print(f"[✅] Loaded {len(data)} clips from {len(lines)} lines")
         return data, labels

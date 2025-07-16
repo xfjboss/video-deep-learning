@@ -23,18 +23,19 @@ class VideoReader:
             raise ValueError(f"Invalid line format: {line}")
 
         id_str = parts[0]
-        label = int(parts[3])  # class_index 是第4个字段（从0计数就是 parts[3]）
+        label = int(parts[3])  # class_index 是第4个字段
 
+        # 视频文件路径直接拼接
+        video_path = os.path.join(self.video_root, f"{id_str}.mp4")
+
+        # 起止帧从 ID 字符串中提取
         id_parts = id_str.split('-')
         if len(id_parts) < 7:
             raise ValueError(f"Invalid ID format: {id_str}")
 
-        participant = id_parts[0]
-        record = id_parts[1]
-        task = id_parts[2]
         start_frame = int(id_parts[5][1:])  # 去掉 'F'
         end_frame = int(id_parts[6][1:])
-        video_path = os.path.join(self.video_root, participant, record, f"{task}.mp4")
+
         return video_path, start_frame, end_frame, label
 
     def _read_clip(self, video_path, start_frame, end_frame):

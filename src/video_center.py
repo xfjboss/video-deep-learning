@@ -7,26 +7,27 @@ from sklearn.metrics import accuracy_score
 from video_reader import VideoDataset, VideoReader
 from video_model import VideoModel
 
-BC = 4
-EP = 30
+BC = 8
+EP = 50
+LR = 1e-4
 def run(model_type='3d', epochs=5):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    video_root = '/home/yudong/Documentos/test/video-deep-learning-master/data/Raw_Videos'
-    train_txt = '/home/yudong/Documentos/test/video-deep-learning-master/data/train_split1.txt'
-    test_txt = '/home/yudong/Documentos/test/video-deep-learning-master/data/test_split1.txt'
+    video_root = 'C:/xf/xf/research/video_task/data/Raw_Videos'
+    train_txt = 'C:/xf/xf/research/video_task/data/Action_Annotations/train_split1.txt'
+    test_txt = 'C:/xf/xf/research/video_task/data/Action_Annotations/test_split1.txt'
     reader = VideoReader(video_root, frames_per_clip=16, model_type=model_type)
 
     train_data, val_data, test_data = reader.load_sampled_data(
         train_txt, test_txt,
-        train_n=200, val_n=40, test_n=60
+        train_n=1000, val_n=200, test_n=200
 )
 
     def to_loader(data, labels, batch_size=BC, device=None):
         dataset = VideoDataset(data, labels, device=device)
-        return DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
-    batch_size = 8 if model_type == '3d' else 32
+    batch_size = BC if model_type == '3d' else 8
     train_loader = to_loader(*train_data, batch_size)
     val_loader = to_loader(*val_data, batch_size)
     test_loader = to_loader(*test_data, batch_size)
@@ -35,7 +36,7 @@ def run(model_type='3d', epochs=5):
     num_classes = max([*train_data[1], *val_data[1], *test_data[1]]) + 1
     model = VideoModel(num_classes=num_classes, model_type=model_type).to(device)
 
-    optimizer = optim.Adam(model.classifier.parameters(), lr=1e-3)
+    optimizer = optim.Adam(model.classifier.parameters(), lr=LR)
     criterion = nn.CrossEntropyLoss()
 
     # Step 3: Train
@@ -82,4 +83,4 @@ def run(model_type='3d', epochs=5):
 
 
 if __name__ == '__main__':
-    run(model_type='3d', epochs=EP)
+    run(model_type='2d', epochs=EP)

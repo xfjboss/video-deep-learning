@@ -103,15 +103,14 @@ class VideoDataset(Dataset):
     def __init__(self, data, labels, device=None):
         self.data = data
         self.labels = labels
-        self.device = device
+        # 不要存 device，也不要用它
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        x = self.data[idx]
+        x = self.data[idx]  # 已是 Tensor
         y = self.labels[idx]
-        if self.device:  # 避免预加载整个数据
-            x = x.to(self.device)
-            y = torch.tensor(y).to(self.device)
+        if not isinstance(y, torch.Tensor):
+            y = torch.tensor(y).long()
         return x, y
